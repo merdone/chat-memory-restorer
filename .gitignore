@@ -2,3 +2,6 @@
 *.session
 .idea
 .venv
+*.jpg
+plan
+*.png

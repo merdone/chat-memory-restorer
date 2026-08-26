@@ -10,44 +10,51 @@ api_hash = getenv("api_hash")
 phone_number = getenv("phone_number")
 account_password = getenv("account_password")
 client = TelegramClient('anon', api_id, api_hash)
+
+
 # client.start(phone=phone_number, password=account_password)
 
-async def process_photo(message):
-    print("processing photo")
+async def process_message(message: telethon.types.Message) -> dict | None:
     message_id = message.id
     message_send_date = message.date
 
-    message_media_photo = message.media.photo
-    photo_date = message_send_date.date()
+    media_date = None
+    media_type = "Unknown"
+    message_media = message.media
+    if isinstance(message_media, telethon.types.MessageMediaDocument):
+        if message_media.voice:
+            media_type = "voice"
+        elif message_media.round:
+            media_type = "round"
+        elif message.media.video:
+            media_type = "video"
+        else:
+            media_type = "document"
+        document = message_media.document
+        media_date = document.date
+    elif isinstance(message_media, telethon.types.MessageMediaPhoto):
+        media_type = "photo"
+        photo = message_media.photo
+        media_date = photo.date
 
-    return message_id, message_send_date, photo_date
+    return {"message_id": message_id,
+            "media_type": media_type,
+            "message_send_date": message_send_date,
+            "media_date": media_date}
 
-async def process_document(message):
-    print("processing document")
-    message_id = message.id
-    message_send_date = message.date
-
-    message_media_document = message.media.document
-    document_date = message_media_document.date()
-
-async def process_message(message):
-    pass
 
 async def main():
     # min_id, от старых к новому
     read_message = await client.get_messages(911873858, limit=None, reverse=True)
 
-    print(read_message[-1].stringify())
+    # print(read_message[-1].stringify())
 
     if (read_message[-1].media):
-        pass
+        print(await process_message(read_message[-1]))
     else:
         print("it's not a photo/document")
 
-    if (isinstance(read_message[-1].media, telethon.types.MessageMediaPhoto)):
-        print(await process_photo(read_message[-1]))
-    elif(isinstance(read_message[-1].media, telethon.types.MessageMediaDocument) and read_message[-1].media.video):
-        print("VIDEO")
+    print("")
 
     path = await read_message[-1].download_media()
     print('File saved to', path)  # printed after download is done
@@ -56,10 +63,8 @@ async def main():
     #     print(message.id, message.text)
 
     # dialogs = await client.get_dialogs()
-    #print(dialogs[0].stringify())
+    # print(dialogs[0].stringify())
     # print(read_message[0].message )
-
-
 
     # async for dialog in client.iter_dialogs():
     #     print(dialog.name, 'has ID', dialog.id)
@@ -91,6 +96,7 @@ async def main():
     #     if message.photo:
     #         path = await message.download_media()
     #         print('File saved to', path)  # printed after download is done
+
 
 with client:
     client.loop.run_until_complete(main())
