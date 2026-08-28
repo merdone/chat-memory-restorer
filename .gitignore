@@ -9,6 +9,8 @@
 .idea
 .venv
 __pycache__
+tools
+
 .env
 *.session
 plan

@@ -59,6 +59,7 @@ async def process_message(message: telethon.types.Message) -> dict | None:
 
 
 async def process_downloading(message: telethon.types.Message, processed_dict: dict) -> str | None:
+    downloaded_path = None
     if processed_dict.get("downloadable"):
         chat_id = str(processed_dict.get("chat_id"))
         correct_date = datetime.now()
@@ -71,20 +72,21 @@ async def process_downloading(message: telethon.types.Message, processed_dict: d
         filename = await generate_file_name(correct_date)
         filepath = pathlib.Path().resolve() / chat_id / filename
 
-        downloaded_path = await message.download_media(file=filepath)
+        media_type = processed_dict.get("media_type")
 
-        if processed_dict.get("media_type") in ("photo", "round"):
+        if media_type not in ("unknown"):
+            downloaded_path = await message.download_media(file=filepath)
+
+        if media_type in ("photo", "round"):
             set_metadata_date(downloaded_path, correct_date)
-
-        elif processed_dict.get("media_type") in ("document", "video"):
+        elif media_type in ("document", "video"):
             metadata = get_metadata_date(downloaded_path)
             correct_date = get_min_date(metadata, correct_date)
             set_metadata_date(downloaded_path, correct_date)
-        else:
+        elif media_type in ("voice"):
             # process voice metadata
             pass
-        return downloaded_path
-    return None
+    return downloaded_path
 
 
 async def main():
@@ -92,6 +94,7 @@ async def main():
     # read_message = await client.get_messages(911873858, limit=None, reverse=True)
     # print(read_message[-1].stringify())
     # message_dict = await process_message(read_message[-1])
+    # print(message_dict)
     # print(await process_downloading(read_message[-1], message_dict))
     # path = await read_message[-1].download_media()
     # print('File saved to', path)
