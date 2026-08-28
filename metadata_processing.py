@@ -1,0 +1,68 @@
+from exiftool import ExifToolHelper
+import pathlib
+from exiftool.exceptions import ExifToolExecuteError
+
+from utils import *
+
+path = pathlib.Path().resolve() / "tools" / "exiftool.exe"
+
+
+def set_metadata_date(image_path, date):
+    with ExifToolHelper(executable=path) as et:
+        windows_format_date = formate_date_for_windows(date)
+        iso_date = formate_date_to_iso(date)
+        et.set_tags(
+            image_path,
+            tags={
+                "EXIF:DateTimeOriginal": iso_date,
+                "EXIF:CreateDate": iso_date,
+                "EXIF:ModifyDate": iso_date,
+                "XMP:CreateDate": iso_date,
+                "XMP:ModifyDate": iso_date,
+                "XMP:DateCreated": iso_date,
+                "QuickTime:CreateDate": iso_date,
+                "QuickTime:ModifyDate": iso_date},
+            params=["-overwrite_original"]
+        )
+
+        try:
+            et.set_tags(
+                image_path,
+                tags={
+                    "File:FileCreateDate": windows_format_date,
+                    "File:FileModifyDate": windows_format_date,
+                },
+                params=["-overwrite_original"]
+            )
+        except ExifToolExecuteError as error:
+            print("STDOUT:", error.stdout)
+            print("STDERR:", error.stderr)
+
+
+def get_metadata_date(filepath):
+    with ExifToolHelper(executable=path) as et:
+        metadata_dict = et.get_metadata(filepath)[0]
+
+        exif_createdate = string_to_datetime(metadata_dict.get("EXIF:CreateDate", None))
+        exif_modifydate = string_to_datetime(metadata_dict.get("EXIF:ModifyDate", None))
+        xmp_createdate = string_to_datetime(metadata_dict.get("XMP:CreateDate", None))
+        xmp_modifydate = string_to_datetime(metadata_dict.get("XMP:ModifyDate", None))
+        xmp_datecreated = string_to_datetime(metadata_dict.get("XMP:DateCreated", None))
+        file_filecreatedate = string_to_datetime(metadata_dict.get("File:FileCreateDate", None))
+        file_filemodifydate = string_to_datetime(metadata_dict.get("File:FileModifyDate", None))
+        quicktime_createdate = string_to_datetime(metadata_dict.get("QuickTime:CreateDate", None))
+        quicktime_modifydate = string_to_datetime(metadata_dict.get("QuickTime:ModifyDate", None))
+
+    date_dict = {"EXIF:CreateDate": exif_createdate,
+                 "EXIF:ModifyDate": exif_modifydate,
+                 "XMP:CreateDate": xmp_createdate,
+                 "XMP:ModifyDate": xmp_modifydate,
+                 "XMP:DateCreated": xmp_datecreated,
+                 "File:FileCreateDate": file_filecreatedate,
+                 "File:FileModifyDate": file_filemodifydate,
+                 "QuickTime:CreateDate": quicktime_createdate,
+                 "QuickTime:ModifyDate": quicktime_modifydate}
+
+    convert_timezones(date_dict)
+
+    return date_dict
