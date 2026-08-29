@@ -4,7 +4,6 @@ import telethon
 from dotenv import load_dotenv
 from os import getenv
 
-from pyasn1.type import char
 from telethon import TelegramClient
 from datetime import datetime
 
@@ -144,13 +143,14 @@ async def process_downloading(message: telethon.types.Message, processed_dict: d
         match media_type:
             case MediaType.PHOTO | MediaType.ROUND:
                 set_metadata_date(downloaded_path, correct_date)
+                set_metadata_windows_date(downloaded_path, correct_date)
             case MediaType.DOCUMENT | MediaType.VIDEO:
                 metadata = get_metadata_date(downloaded_path)
                 correct_date = get_min_date(metadata, correct_date)
                 set_metadata_date(downloaded_path, correct_date)
+                set_metadata_windows_date(downloaded_path, correct_date)
             case MediaType.VOICE:
-                # process voice metadata
-                pass
+                set_metadata_windows_date(downloaded_path, correct_date)
 
         additional_path = build_path(processed_dict, correct_date, sort_options)
         full_directory = basic_path / additional_path

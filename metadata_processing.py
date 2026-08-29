@@ -7,9 +7,11 @@ from utils import *
 path = pathlib.Path().resolve() / "tools" / "exiftool.exe"
 
 
+# setting fields EXIF:DateTimeOriginal, EXIF:CreateDate, EXIF:ModifyDate, XMP:CreateDate,
+# XMP:ModifyDate, XMP:DateCreated, QuickTime:CreateDate, QuickTime:ModifyDate
+# which are important for all systems(Android, Apple, etc.)
 def set_metadata_date(image_path, date):
     with ExifToolHelper(executable=path) as et:
-        windows_format_date = formate_date_for_windows(date)
         iso_date = formate_date_to_iso(date)
         et.set_tags(
             image_path,
@@ -25,6 +27,11 @@ def set_metadata_date(image_path, date):
             params=["-overwrite_original"]
         )
 
+
+# setting fields File:FileCreateDate, File:FileModifyDate which are important for windows explorer
+def set_metadata_windows_date(image_path, date):
+    with ExifToolHelper(executable=path) as et:
+        windows_format_date = formate_date_for_windows(date)
         try:
             et.set_tags(
                 image_path,
