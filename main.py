@@ -53,7 +53,7 @@ class SortOptions:
 class DownloadOptions:
     allowed_media_types: frozenset[MediaType]
 
-    def allow(self, media_type: MediaType) -> bool:
+    def is_allowed(self, media_type: MediaType) -> bool:
         return media_type in self.allowed_media_types
 
     @classmethod
@@ -96,7 +96,9 @@ async def process_message(message: telethon.types.Message) -> dict | None:
             media_type = MediaType.PHOTO
             photo = message_media.photo
             media_date = photo.date
-        downloadable = True
+
+        if media_type != MediaType.UNKNOWN:
+            downloadable = True
     else:
         media_type = MediaType.TEXT
 
@@ -140,47 +142,55 @@ def build_path(processed_dict: dict, correct_date: datetime, sort_options: SortO
 
 
 async def process_downloading(message: telethon.types.Message, processed_dict: dict,
-                              sort_options: SortOptions, options: DownloadOptions) -> str | None:
+                              sort_options: SortOptions) -> str | None:
     downloaded_path = None
-    if processed_dict.get("downloadable") and options.allow(processed_dict.get("media_type")):
-        correct_date = datetime.now()
+    correct_date = datetime.now()
 
-        if processed_dict.get("media_date"):
-            correct_date = processed_dict.get("media_date")
-        else:
-            correct_date = processed_dict.get("message_send_date")
+    if processed_dict.get("media_date"):
+        correct_date = processed_dict.get("media_date")
+    else:
+        correct_date = processed_dict.get("message_send_date")
 
-        filename = await generate_file_name(correct_date)
-        basic_path = pathlib.Path() / "data"
-        temporary_path = basic_path / filename
+    filename = await generate_file_name(correct_date)
+    basic_path = pathlib.Path() / "data"
+    temporary_path = basic_path / filename
 
-        media_type = processed_dict.get("media_type")
+    media_type = processed_dict.get("media_type")
 
-        if media_type != MediaType.UNKNOWN:
-            downloaded_path = await message.download_media(file=temporary_path)
+    downloaded_path = await message.download_media(file=temporary_path)
 
-        saved_filename = pathlib.Path(downloaded_path).name
+    saved_filename = pathlib.Path(downloaded_path).name
 
-        match media_type:
-            case MediaType.PHOTO | MediaType.ROUND:
-                set_metadata_date(downloaded_path, correct_date)
-                set_metadata_windows_date(downloaded_path, correct_date)
-            case MediaType.DOCUMENT | MediaType.VIDEO:
-                metadata = get_metadata_date(downloaded_path)
-                correct_date = get_min_date(metadata, correct_date)
-                set_metadata_date(downloaded_path, correct_date)
-                set_metadata_windows_date(downloaded_path, correct_date)
-            case MediaType.VOICE:
-                set_metadata_windows_date(downloaded_path, correct_date)
+    match media_type:
+        case MediaType.PHOTO | MediaType.ROUND:
+            set_metadata_date(downloaded_path, correct_date)
+            set_metadata_windows_date(downloaded_path, correct_date)
+        case MediaType.DOCUMENT | MediaType.VIDEO:
+            metadata = get_metadata_date(downloaded_path)
+            correct_date = get_min_date(metadata, correct_date)
+            set_metadata_date(downloaded_path, correct_date)
+            set_metadata_windows_date(downloaded_path, correct_date)
+        case MediaType.VOICE:
+            set_metadata_windows_date(downloaded_path, correct_date)
 
-        additional_path = build_path(processed_dict, correct_date, sort_options)
-        full_directory = basic_path / additional_path
-        if not os.path.isdir(full_directory):
-            os.makedirs(full_directory, exist_ok=True)
+    additional_path = build_path(processed_dict, correct_date, sort_options)
+    full_directory = basic_path / additional_path
+    if not os.path.isdir(full_directory):
+        os.makedirs(full_directory, exist_ok=True)
 
-        full_file_path = full_directory / saved_filename
-        os.replace(downloaded_path, full_file_path)
+    full_file_path = full_directory / saved_filename
+    os.replace(downloaded_path, full_file_path)
+
     return downloaded_path
+
+
+async def message_pipeline(message: telethon.types.Message,
+                           sort_options: SortOptions, download_options: DownloadOptions):
+    processed_dict = await process_message(message)
+
+    allowed_to_download = download_options.is_allowed(processed_dict.get("media_type"))
+    if processed_dict.get("downloadable") and allowed_to_download:
+        downloaded_path = await process_downloading(message, processed_dict, sort_options)
 
 
 async def main():
@@ -194,16 +204,17 @@ async def main():
     # path = await read_message[-1].download_media()
     # print('File saved to', path)
 
-    #options = DownloadOptions.allow_all()
-    options = DownloadOptions.only(
+    # download_options = DownloadOptions.allow_all()
+    # download_options = DownloadOptions.allow_none()
+    download_options = DownloadOptions.only(
         MediaType.VIDEO,
         MediaType.PHOTO,
+        MediaType.ROUND,
     )
-    # options = DownloadOptions.allow_none()
+
     sort_options = SortOptions(SortType.YEAR, True, True)
     async for message in client.iter_messages(911873858, reverse=True, limit=100):
-        processed_dict = await process_message(message)
-        await process_downloading(message, processed_dict, sort_options, options)
+        await message_pipeline(message, sort_options, download_options)
 
     # dialogs = await client.get_dialogs()
     # async for dialog in client.iter_dialogs():
