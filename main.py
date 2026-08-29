@@ -1,4 +1,5 @@
 import os
+from dataclasses import dataclass
 
 import telethon
 from dotenv import load_dotenv
@@ -46,6 +47,26 @@ class SortOptions:
         self.sort_type = sort_type
         self.sort_by_chat_id = sort_by_chat_id
         self.sort_by_media_type = sort_by_media_type
+
+
+@dataclass(frozen=True)
+class DownloadOptions:
+    allowed_media_types: frozenset[MediaType]
+
+    def allow(self, media_type: MediaType) -> bool:
+        return media_type in self.allowed_media_types
+
+    @classmethod
+    def only(cls, *allowed_types: MediaType):
+        return cls(allowed_media_types=frozenset(allowed_types))
+
+    @classmethod
+    def allow_all(cls):
+        return cls(allowed_media_types=frozenset(MediaType))
+
+    @classmethod
+    def allow_none(cls):
+        return cls(allowed_media_types=frozenset())
 
 
 async def process_message(message: telethon.types.Message) -> dict | None:
@@ -119,9 +140,9 @@ def build_path(processed_dict: dict, correct_date: datetime, sort_options: SortO
 
 
 async def process_downloading(message: telethon.types.Message, processed_dict: dict,
-                              sort_options: SortOptions) -> str | None:
+                              sort_options: SortOptions, options: DownloadOptions) -> str | None:
     downloaded_path = None
-    if processed_dict.get("downloadable"):
+    if processed_dict.get("downloadable") and options.allow(processed_dict.get("media_type")):
         correct_date = datetime.now()
 
         if processed_dict.get("media_date"):
@@ -173,10 +194,16 @@ async def main():
     # path = await read_message[-1].download_media()
     # print('File saved to', path)
 
+    #options = DownloadOptions.allow_all()
+    options = DownloadOptions.only(
+        MediaType.VIDEO,
+        MediaType.PHOTO,
+    )
+    # options = DownloadOptions.allow_none()
+    sort_options = SortOptions(SortType.YEAR, True, True)
     async for message in client.iter_messages(911873858, reverse=True, limit=100):
         processed_dict = await process_message(message)
-        sort_options = SortOptions(SortType.YEAR, True, True)
-        await process_downloading(message, processed_dict, sort_options)
+        await process_downloading(message, processed_dict, sort_options, options)
 
     # dialogs = await client.get_dialogs()
     # async for dialog in client.iter_dialogs():
