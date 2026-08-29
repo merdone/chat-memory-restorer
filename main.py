@@ -1,10 +1,14 @@
-import datetime
+import os
 
 import telethon
 from dotenv import load_dotenv
 from os import getenv
+
+from pyasn1.type import char
 from telethon import TelegramClient
 from datetime import datetime
+
+import pathlib
 
 from enum import StrEnum
 
@@ -29,6 +33,20 @@ class MediaType(StrEnum):
     DOCUMENT = "document"
     PHOTO = "photo"
     TEXT = "text"
+
+
+class SortType(StrEnum):
+    NONE = "none"
+    YEAR = "year"
+    YEAR_MONTH = "year_month"
+    FULL_DATE = "full_date"
+
+
+class SortOptions:
+    def __init__(self, sort_type: SortType, sort_by_chat_id: bool, sort_by_media_type: bool):
+        self.sort_type = sort_type
+        self.sort_by_chat_id = sort_by_chat_id
+        self.sort_by_media_type = sort_by_media_type
 
 
 async def process_message(message: telethon.types.Message) -> dict | None:
@@ -70,10 +88,41 @@ async def process_message(message: telethon.types.Message) -> dict | None:
             "downloadable": downloadable}
 
 
-async def process_downloading(message: telethon.types.Message, processed_dict: dict) -> str | None:
+def build_path(processed_dict: dict, correct_date: datetime, sort_options: SortOptions) -> pathlib.Path:
+    sort_type = sort_options.sort_type
+    sort_by_chat_id = sort_options.sort_by_chat_id
+    sort_by_media_type = sort_options.sort_by_media_type
+
+    chat_id = str(processed_dict.get("chat_id"))
+    media_type = processed_dict.get("media_type")
+
+    additional_path = pathlib.Path()
+
+    if sort_by_chat_id:
+        additional_path = additional_path / chat_id
+
+    if sort_by_media_type:
+        additional_path = additional_path / media_type
+
+    day = str(correct_date.day)
+    month = str(correct_date.month)
+    year = str(correct_date.year)
+
+    match sort_type:
+        case SortType.YEAR:
+            additional_path = additional_path / year
+        case SortType.YEAR_MONTH:
+            additional_path = additional_path / year / month
+        case SortType.FULL_DATE:
+            additional_path = additional_path / year / month / day
+
+    return additional_path
+
+
+async def process_downloading(message: telethon.types.Message, processed_dict: dict,
+                              sort_options: SortOptions) -> str | None:
     downloaded_path = None
     if processed_dict.get("downloadable"):
-        chat_id = str(processed_dict.get("chat_id"))
         correct_date = datetime.now()
 
         if processed_dict.get("media_date"):
@@ -82,12 +131,15 @@ async def process_downloading(message: telethon.types.Message, processed_dict: d
             correct_date = processed_dict.get("message_send_date")
 
         filename = await generate_file_name(correct_date)
-        filepath = pathlib.Path().resolve() / chat_id / filename
+        basic_path = pathlib.Path() / "data"
+        temporary_path = basic_path / filename
 
         media_type = processed_dict.get("media_type")
 
         if media_type != MediaType.UNKNOWN:
-            downloaded_path = await message.download_media(file=filepath)
+            downloaded_path = await message.download_media(file=temporary_path)
+
+        saved_filename = pathlib.Path(downloaded_path).name
 
         match media_type:
             case MediaType.PHOTO | MediaType.ROUND:
@@ -99,22 +151,32 @@ async def process_downloading(message: telethon.types.Message, processed_dict: d
             case MediaType.VOICE:
                 # process voice metadata
                 pass
+
+        additional_path = build_path(processed_dict, correct_date, sort_options)
+        full_directory = basic_path / additional_path
+        if not os.path.isdir(full_directory):
+            os.makedirs(full_directory, exist_ok=True)
+
+        full_file_path = full_directory / saved_filename
+        os.replace(downloaded_path, full_file_path)
     return downloaded_path
 
 
 async def main():
     # min_id, от старых к новому
-    read_message = await client.get_messages(911873858, limit=None, reverse=True)
-    print(read_message[-1].stringify())
-    message_dict = await process_message(read_message[-1])
-    print(message_dict)
-    print(await process_downloading(read_message[-1], message_dict))
+    # read_message = await client.get_messages(911873858, limit=None, reverse=True)
+    # print(read_message[-1].stringify())
+    # message_dict = await process_message(read_message[-1])
+    # print(message_dict)
+    # sort_options = SortOptions(SortType.YEAR, True, True)
+    # print(await process_downloading(read_message[-1], message_dict, sort_options))
     # path = await read_message[-1].download_media()
     # print('File saved to', path)
 
-    # async for message in client.iter_messages(911873858, reverse=True, limit=None):
-    #     processed_dict = await process_message(message)
-    #     await process_downloading(message, processed_dict)
+    async for message in client.iter_messages(911873858, reverse=True, limit=100):
+        processed_dict = await process_message(message)
+        sort_options = SortOptions(SortType.YEAR, True, True)
+        await process_downloading(message, processed_dict, sort_options)
 
     # dialogs = await client.get_dialogs()
     # async for dialog in client.iter_dialogs():
