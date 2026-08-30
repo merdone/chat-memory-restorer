@@ -1,8 +1,10 @@
 from exiftool import ExifToolHelper
 import pathlib
+from datetime import datetime
 from exiftool.exceptions import ExifToolExecuteError
 
-from utils import *
+from models import MediaType
+from utils import formate_date_to_iso, formate_date_for_windows, string_to_datetime, get_min_date, convert_timezones
 
 path = pathlib.Path().resolve() / "tools" / "exiftool.exe"
 
@@ -73,3 +75,21 @@ def get_metadata_date(filepath):
     convert_timezones(date_dict)
 
     return date_dict
+
+
+def process_metadata_changes(filepath: str, media_type: MediaType, last_date_from_message: datetime):
+    match media_type:
+        case MediaType.PHOTO | MediaType.ROUND:
+            set_metadata_date(filepath, last_date_from_message)
+            set_metadata_windows_date(filepath, last_date_from_message)
+            return last_date_from_message
+        case MediaType.DOCUMENT | MediaType.VIDEO:
+            metadata = get_metadata_date(filepath)
+            final_last_date = get_min_date(metadata, last_date_from_message)
+            set_metadata_date(filepath, final_last_date)
+            set_metadata_windows_date(filepath, final_last_date)
+            return final_last_date
+        case MediaType.VOICE:
+            set_metadata_windows_date(filepath, last_date_from_message)
+            return last_date_from_message
+    return None
