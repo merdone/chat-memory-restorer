@@ -72,6 +72,7 @@ class DownloadOptions:
 
 basic_path = pathlib.Path() / "data"
 
+
 async def process_message(message: telethon.types.Message) -> dict | None:
     chat_id = message.peer_id.user_id
 
@@ -155,7 +156,7 @@ async def get_last_date_from_message_data(processed_dict: dict):
     return last_date_from_message
 
 
-async def process_downloading(message: telethon.types.Message, last_date_from_message) -> str | None:
+async def download_message(message: telethon.types.Message, last_date_from_message) -> str | None:
     filename = await generate_file_name(last_date_from_message)
     temporary_path = basic_path / filename
     downloaded_path = await message.download_media(file=temporary_path)
@@ -190,32 +191,37 @@ async def replace_file(downloaded_path, additional_path):
     full_file_path = full_directory / saved_filename
     os.replace(downloaded_path, full_file_path)
 
-    return downloaded_path
+    return full_file_path
 
 
-async def message_pipeline(message: telethon.types.Message,
+async def message_pipeline(message: telethon.types.Message, database: Database,
                            sort_options: SortOptions, download_options: DownloadOptions):
-    database = Database("test.db")
-
     processed_dict = await process_message(message)
+    chat_id = processed_dict.get("chat_id")
+    message_id = processed_dict.get("message_id")
     media_type = processed_dict.get("media_type")
     downloadable = processed_dict.get("downloadable")
+    message_send_date = processed_dict.get("message_send_date")
 
     last_date_from_message = await get_last_date_from_message_data(processed_dict)
 
     allowed_to_download = download_options.is_allowed(media_type)
     if downloadable and allowed_to_download:
-        downloaded_path = await process_downloading(message, last_date_from_message)
-        final_date = await process_metadata_changes(downloaded_path, media_type, last_date_from_message)
-        additional_path = build_path(processed_dict, final_date, sort_options)
-        await replace_file(downloaded_path, additional_path)
-    # обработка сообщение(получение словаря)
-    # можно не проверять есть ли уже в базе, потому что на моменте min_id мы уже начинаем поиск с последней остановки
-    # скачать медиа(если дозволено) в общую папку дата
+        downloaded_path = await download_message(message, last_date_from_message)
 
-    # собираем хеш с него, если он уже есть в БД, то удаляем
-    # если нет в БД, то сохраняем, меняем метаданные, перемещаем по новому пути
+        source_hash = get_sha256_hash(downloaded_path)
+        database_path = database.get_media_file_by_hash(source_hash)
 
+        # update date if it's older
+        if database_path is None:
+            final_date = await process_metadata_changes(downloaded_path, media_type, last_date_from_message)
+            additional_path = build_path(processed_dict, final_date, sort_options)
+            saved_filepath = await replace_file(downloaded_path, additional_path)
+            database.add_media_file(source_hash, final_date, str(saved_filepath))  # date
+        else:
+            os.remove(downloaded_path)
+
+        database.add_message(message_id, media_type, source_hash, message_send_date, chat_id)
 
 async def main():
     # min_id, от старых к новому
@@ -227,15 +233,15 @@ async def main():
     # print(await process_downloading(read_message[-1], message_dict, sort_options))
     # path = await read_message[-1].download_media()
     # print('File saved to', path)
+    # 1399234159
+    test_chat_id = 911873858
 
-    test_chat_id = 1399234159
-
-    # database = Database("test.db")
-    # database.add_chat(test_chat_id, "test")
+    database = Database("test.db")
+    database.add_chat(test_chat_id, "test")
     # download_options = DownloadOptions.allow_all()
     # download_options = DownloadOptions.allow_none()
     download_options = DownloadOptions.only(
-        MediaType.VIDEO,
+        # MediaType.VIDEO,
         MediaType.PHOTO,
         MediaType.ROUND,
         MediaType.VOICE
@@ -244,9 +250,9 @@ async def main():
     sort_options = SortOptions(SortType.YEAR, True, True)
 
     # last_id = database.get_max_message_id(test_chat_id)
-    # min_id=last_id
-    async for message in client.iter_messages(test_chat_id, reverse=True, limit=None):
-        await message_pipeline(message, sort_options, download_options)
+    # min_id=last_id,
+    async for message in client.iter_messages(test_chat_id, reverse=False, limit=100):
+        await message_pipeline(message, database, sort_options, download_options)
 
     # dialogs = await client.get_dialogs()
     # async for dialog in client.iter_dialogs():

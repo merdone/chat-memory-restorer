@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime
 import random
 import string
@@ -57,3 +58,10 @@ def get_min_date(date_dict, current_min_date):
             if current_date < min_date:
                 min_date = current_date
     return min_date
+
+
+def get_sha256_hash(filename) -> str:
+    with open(filename, "rb") as file:
+        bytes = file.read()
+        readable_hash = hashlib.sha256(bytes).hexdigest()
+    return readable_hash

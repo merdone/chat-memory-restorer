@@ -22,6 +22,7 @@ class Database:
                 CREATE TABLE IF NOT EXISTS media_files
                 (
                     source_sha256 TEXT PRIMARY KEY NOT NULL,
+                    filedate TEXT NOT NULL,
                     path TEXT NOT NULL
                 );
             """)
@@ -32,7 +33,7 @@ class Database:
                     message_id INTEGER NOT NULL,
                     media_type TEXT NOT NULL,
                     source_sha256 TEXT NOT NULL,
-                    media_date TEXT NOT NULL,
+                    message_send_date TEXT NOT NULL,
                     chat_id INTEGER NOT NULL,
                     
                     PRIMARY KEY (chat_id, message_id),
@@ -51,28 +52,24 @@ class Database:
                         """
             self._connection.execute(sql_command, (chat_id, name))
 
-    def add_message(self, message_id, media_type, source_sha256, media_date, chat_id):
+    def add_message(self, message_id, media_type, source_sha256, message_send_date, chat_id):
         with self._connection:
-            sql_command = """INSERT INTO messages (message_id, media_type, source_sha256, media_date, chat_id)
+            sql_command = """INSERT INTO messages (message_id, media_type, source_sha256, message_send_date, chat_id)
                             VALUES (?, ?, ?, ?, ?)
                             ON CONFLICT (chat_id, message_id) DO NOTHING;"""
-            self._connection.execute(sql_command, (message_id, media_type, source_sha256, media_date, chat_id))
+            self._connection.execute(sql_command, (message_id, media_type, source_sha256, message_send_date, chat_id))
 
-    def search_max_message_id(self, chat_id):
+    def get_max_message_id(self, chat_id):
         sql_command = """SELECT MAX(message_id) FROM messages WHERE chat_id = ?"""
         sql_result = self._connection.execute(sql_command, (chat_id,))
         input_result = dict(sql_result.fetchone())
         return input_result.get("MAX(message_id)", 0)
 
     # in each situation returns path of the file
-    def get_or_add_media_file(self, source_sha256, path):
-        search_result = self.get_media_file_by_hash(source_sha256)
-        if search_result is not None:
-            return search_result
+    def add_media_file(self, source_sha256, filedate, path):
         with self._connection:
-            sql_command = """INSERT INTO media_files (source_sha256, path) VALUES (?, ?)"""
-            self._connection.execute(sql_command, (source_sha256, path))
-        return path
+            sql_command = """INSERT INTO media_files (source_sha256, filedate, path) VALUES (?, ?, ?)"""
+            self._connection.execute(sql_command, (source_sha256, filedate, path))
 
     def get_media_file_by_hash(self, source_sha256):
         sql_command = """SELECT * FROM media_files WHERE source_sha256 = ?"""
