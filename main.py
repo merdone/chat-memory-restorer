@@ -1,5 +1,4 @@
 import os
-from dataclasses import dataclass
 
 import telethon
 from dotenv import load_dotenv
@@ -10,7 +9,7 @@ from datetime import datetime
 
 import pathlib
 
-from enum import StrEnum
+from models import MediaType, SortType, DownloadOptions, SortOptions
 
 from database import Database
 from metadata_processing import *
@@ -25,49 +24,6 @@ client = TelegramClient('anon', api_id, api_hash)
 
 
 # client.start(phone=phone_number, password=account_password)
-
-class MediaType(StrEnum):
-    UNKNOWN = "unknown"
-    VOICE = "voice"
-    ROUND = "round"
-    VIDEO = "video"
-    DOCUMENT = "document"
-    PHOTO = "photo"
-    TEXT = "text"
-
-
-class SortType(StrEnum):
-    NONE = "none"
-    YEAR = "year"
-    YEAR_MONTH = "year_month"
-    FULL_DATE = "full_date"
-
-
-class SortOptions:
-    def __init__(self, sort_type: SortType, sort_by_chat_id: bool, sort_by_media_type: bool):
-        self.sort_type = sort_type
-        self.sort_by_chat_id = sort_by_chat_id
-        self.sort_by_media_type = sort_by_media_type
-
-
-@dataclass(frozen=True)
-class DownloadOptions:
-    allowed_media_types: frozenset[MediaType]
-
-    def is_allowed(self, media_type: MediaType) -> bool:
-        return media_type in self.allowed_media_types
-
-    @classmethod
-    def only(cls, *allowed_types: MediaType):
-        return cls(allowed_media_types=frozenset(allowed_types))
-
-    @classmethod
-    def allow_all(cls):
-        return cls(allowed_media_types=frozenset(MediaType))
-
-    @classmethod
-    def allow_none(cls):
-        return cls(allowed_media_types=frozenset())
 
 
 basic_path = pathlib.Path() / "data"
@@ -222,6 +178,7 @@ async def message_pipeline(message: telethon.types.Message, database: Database,
             os.remove(downloaded_path)
 
         database.add_message(message_id, media_type, source_hash, message_send_date, chat_id)
+
 
 async def main():
     # min_id, от старых к новому
