@@ -1,3 +1,4 @@
+import datetime
 from enum import StrEnum
 from dataclasses import dataclass
 
@@ -17,6 +18,16 @@ class SortType(StrEnum):
     YEAR = "year"
     YEAR_MONTH = "year_month"
     FULL_DATE = "full_date"
+
+
+@dataclass(frozen=True)
+class MessageInfo:
+    chat_id: int
+    message_id: int
+    media_type: MediaType
+    message_send_date: datetime.datetime
+    media_date: datetime.datetime | None
+    downloadable: bool
 
 
 @dataclass(frozen=True)

@@ -9,7 +9,7 @@ from datetime import datetime
 
 import pathlib
 
-from models import MediaType, SortType, DownloadOptions, SortOptions
+from models import MediaType, SortType, DownloadOptions, SortOptions, MessageInfo
 
 from database import Database
 from metadata_processing import *
@@ -22,14 +22,13 @@ phone_number = getenv("phone_number")
 account_password = getenv("account_password")
 client = TelegramClient('anon', api_id, api_hash)
 
-
 # client.start(phone=phone_number, password=account_password)
 
 
 basic_path = pathlib.Path() / "data"
 
 
-async def process_message(message: telethon.types.Message) -> dict | None:
+async def process_message(message: telethon.types.Message) -> MessageInfo:
     chat_id = message.peer_id.user_id
 
     message_id = message.id
@@ -61,22 +60,16 @@ async def process_message(message: telethon.types.Message) -> dict | None:
             downloadable = True
     else:
         media_type = MediaType.TEXT
-
-    return {"chat_id": chat_id,
-            "message_id": message_id,
-            "media_type": media_type,
-            "message_send_date": message_send_date,
-            "media_date": media_date,
-            "downloadable": downloadable}
+    return MessageInfo(chat_id, message_id, media_type, message_send_date, media_date, downloadable)
 
 
-def build_path(processed_dict: dict, correct_date: datetime, sort_options: SortOptions) -> pathlib.Path:
+def build_path(message_info: MessageInfo, correct_date: datetime, sort_options: SortOptions) -> pathlib.Path:
     sort_type = sort_options.sort_type
     sort_by_chat_id = sort_options.sort_by_chat_id
     sort_by_media_type = sort_options.sort_by_media_type
 
-    chat_id = str(processed_dict.get("chat_id"))
-    media_type = processed_dict.get("media_type")
+    chat_id = str(message_info.chat_id)
+    media_type = message_info.media_type
 
     additional_path = pathlib.Path()
 
@@ -101,14 +94,11 @@ def build_path(processed_dict: dict, correct_date: datetime, sort_options: SortO
     return additional_path
 
 
-async def get_last_date_from_message_data(processed_dict: dict):
-    last_date_from_message = datetime.now()
-
-    if processed_dict.get("media_date"):
-        last_date_from_message = processed_dict.get("media_date")
+async def get_last_date_from_message_data(message_info: MessageInfo):
+    if message_info.media_date:
+        last_date_from_message = message_info.media_date
     else:
-        last_date_from_message = processed_dict.get("message_send_date")
-
+        last_date_from_message = message_info.message_send_date
     return last_date_from_message
 
 
@@ -152,17 +142,19 @@ async def replace_file(downloaded_path, additional_path):
 
 async def message_pipeline(message: telethon.types.Message, database: Database,
                            sort_options: SortOptions, download_options: DownloadOptions):
-    processed_dict = await process_message(message)
-    chat_id = processed_dict.get("chat_id")
-    message_id = processed_dict.get("message_id")
-    media_type = processed_dict.get("media_type")
-    downloadable = processed_dict.get("downloadable")
-    message_send_date = processed_dict.get("message_send_date")
+    message_info = await process_message(message)
 
-    last_date_from_message = await get_last_date_from_message_data(processed_dict)
+    media_type = message_info.media_type
+    downloadable = message_info.downloadable
+
+    last_date_from_message = await get_last_date_from_message_data(message_info)
 
     allowed_to_download = download_options.is_allowed(media_type)
     if downloadable and allowed_to_download:
+        chat_id = message_info.chat_id
+        message_id = message_info.message_id
+        message_send_date = message_info.message_send_date
+
         downloaded_path = await download_message(message, last_date_from_message)
 
         source_hash = get_sha256_hash(downloaded_path)
@@ -171,7 +163,7 @@ async def message_pipeline(message: telethon.types.Message, database: Database,
         # update date if it's older
         if database_path is None:
             final_date = await process_metadata_changes(downloaded_path, media_type, last_date_from_message)
-            additional_path = build_path(processed_dict, final_date, sort_options)
+            additional_path = build_path(message_info, final_date, sort_options)
             saved_filepath = await replace_file(downloaded_path, additional_path)
             database.add_media_file(source_hash, final_date, str(saved_filepath))  # date
         else:
