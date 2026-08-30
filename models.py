@@ -1,6 +1,7 @@
 from enum import StrEnum
 from dataclasses import dataclass
 
+
 class MediaType(StrEnum):
     UNKNOWN = "unknown"
     VOICE = "voice"
@@ -18,11 +19,11 @@ class SortType(StrEnum):
     FULL_DATE = "full_date"
 
 
+@dataclass(frozen=True)
 class SortOptions:
-    def __init__(self, sort_type: SortType, sort_by_chat_id: bool, sort_by_media_type: bool):
-        self.sort_type = sort_type
-        self.sort_by_chat_id = sort_by_chat_id
-        self.sort_by_media_type = sort_by_media_type
+    sort_type: SortType
+    sort_by_chat_id: bool
+    sort_by_media_type: bool
 
 
 @dataclass(frozen=True)
