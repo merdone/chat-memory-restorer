@@ -28,7 +28,7 @@ def string_to_datetime(date_string: str) -> datetime | None:
         return None
 
 
-async def generate_file_name(date) -> str:
+def generate_file_name(date) -> str:
     random_part = ''.join(random.choices(string.ascii_uppercase + string.ascii_lowercase + string.digits, k=10))
     return date.strftime('%d_%m_%Y_') + random_part
 
