@@ -38,6 +38,14 @@ class SortOptions:
 
 
 @dataclass(frozen=True)
+class Config:
+    api_id: int
+    api_hash: str
+    phone_number: str
+    account_password: str
+
+
+@dataclass(frozen=True)
 class DownloadOptions:
     allowed_media_types: frozenset[MediaType]
 
