@@ -12,6 +12,7 @@ import pathlib
 
 from enum import StrEnum
 
+from database import Database
 from metadata_processing import *
 
 load_dotenv()
@@ -68,6 +69,8 @@ class DownloadOptions:
     def allow_none(cls):
         return cls(allowed_media_types=frozenset())
 
+
+basic_path = pathlib.Path() / "data"
 
 async def process_message(message: telethon.types.Message) -> dict | None:
     chat_id = message.peer_id.user_id
@@ -141,40 +144,46 @@ def build_path(processed_dict: dict, correct_date: datetime, sort_options: SortO
     return additional_path
 
 
-async def process_downloading(message: telethon.types.Message, processed_dict: dict,
-                              sort_options: SortOptions) -> str | None:
-    downloaded_path = None
-    correct_date = datetime.now()
+async def get_last_date_from_message_data(processed_dict: dict):
+    last_date_from_message = datetime.now()
 
     if processed_dict.get("media_date"):
-        correct_date = processed_dict.get("media_date")
+        last_date_from_message = processed_dict.get("media_date")
     else:
-        correct_date = processed_dict.get("message_send_date")
+        last_date_from_message = processed_dict.get("message_send_date")
 
-    filename = await generate_file_name(correct_date)
-    basic_path = pathlib.Path() / "data"
+    return last_date_from_message
+
+
+async def process_downloading(message: telethon.types.Message, last_date_from_message) -> str | None:
+    filename = await generate_file_name(last_date_from_message)
     temporary_path = basic_path / filename
-
-    media_type = processed_dict.get("media_type")
-
     downloaded_path = await message.download_media(file=temporary_path)
+    return downloaded_path
 
-    saved_filename = pathlib.Path(downloaded_path).name
 
+async def process_metadata_changes(filepath: str, media_type: MediaType, last_date_from_message):
     match media_type:
         case MediaType.PHOTO | MediaType.ROUND:
-            set_metadata_date(downloaded_path, correct_date)
-            set_metadata_windows_date(downloaded_path, correct_date)
+            set_metadata_date(filepath, last_date_from_message)
+            set_metadata_windows_date(filepath, last_date_from_message)
+            return last_date_from_message
         case MediaType.DOCUMENT | MediaType.VIDEO:
-            metadata = get_metadata_date(downloaded_path)
-            correct_date = get_min_date(metadata, correct_date)
-            set_metadata_date(downloaded_path, correct_date)
-            set_metadata_windows_date(downloaded_path, correct_date)
+            metadata = get_metadata_date(filepath)
+            final_last_date = get_min_date(metadata, last_date_from_message)
+            set_metadata_date(filepath, final_last_date)
+            set_metadata_windows_date(filepath, final_last_date)
+            return final_last_date
         case MediaType.VOICE:
-            set_metadata_windows_date(downloaded_path, correct_date)
+            set_metadata_windows_date(filepath, last_date_from_message)
+            return last_date_from_message
+    return None
 
-    additional_path = build_path(processed_dict, correct_date, sort_options)
+
+async def replace_file(downloaded_path, additional_path):
+    saved_filename = pathlib.Path(downloaded_path).name
     full_directory = basic_path / additional_path
+
     if not os.path.isdir(full_directory):
         os.makedirs(full_directory, exist_ok=True)
 
@@ -186,11 +195,26 @@ async def process_downloading(message: telethon.types.Message, processed_dict: d
 
 async def message_pipeline(message: telethon.types.Message,
                            sort_options: SortOptions, download_options: DownloadOptions):
-    processed_dict = await process_message(message)
+    database = Database("test.db")
 
-    allowed_to_download = download_options.is_allowed(processed_dict.get("media_type"))
-    if processed_dict.get("downloadable") and allowed_to_download:
-        downloaded_path = await process_downloading(message, processed_dict, sort_options)
+    processed_dict = await process_message(message)
+    media_type = processed_dict.get("media_type")
+    downloadable = processed_dict.get("downloadable")
+
+    last_date_from_message = await get_last_date_from_message_data(processed_dict)
+
+    allowed_to_download = download_options.is_allowed(media_type)
+    if downloadable and allowed_to_download:
+        downloaded_path = await process_downloading(message, last_date_from_message)
+        final_date = await process_metadata_changes(downloaded_path, media_type, last_date_from_message)
+        additional_path = build_path(processed_dict, final_date, sort_options)
+        await replace_file(downloaded_path, additional_path)
+    # обработка сообщение(получение словаря)
+    # можно не проверять есть ли уже в базе, потому что на моменте min_id мы уже начинаем поиск с последней остановки
+    # скачать медиа(если дозволено) в общую папку дата
+
+    # собираем хеш с него, если он уже есть в БД, то удаляем
+    # если нет в БД, то сохраняем, меняем метаданные, перемещаем по новому пути
 
 
 async def main():
@@ -204,16 +228,24 @@ async def main():
     # path = await read_message[-1].download_media()
     # print('File saved to', path)
 
+    test_chat_id = 1399234159
+
+    # database = Database("test.db")
+    # database.add_chat(test_chat_id, "test")
     # download_options = DownloadOptions.allow_all()
     # download_options = DownloadOptions.allow_none()
     download_options = DownloadOptions.only(
         MediaType.VIDEO,
         MediaType.PHOTO,
         MediaType.ROUND,
+        MediaType.VOICE
     )
 
     sort_options = SortOptions(SortType.YEAR, True, True)
-    async for message in client.iter_messages(911873858, reverse=True, limit=100):
+
+    # last_id = database.get_max_message_id(test_chat_id)
+    # min_id=last_id
+    async for message in client.iter_messages(test_chat_id, reverse=True, limit=None):
         await message_pipeline(message, sort_options, download_options)
 
     # dialogs = await client.get_dialogs()
