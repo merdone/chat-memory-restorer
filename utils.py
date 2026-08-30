@@ -13,16 +13,18 @@ def formate_date_to_iso(date):
     return date.isoformat()
 
 
-def string_to_datetime(date_string: str) -> datetime:
+def string_to_datetime(date_string: str) -> datetime | None:
     if date_string is None:
+        return None
+
+    if date_string.startswith("0000"):
         return None
 
     try:
         normalized = date_string[:10].replace(":", "-") + date_string[10:]
-    except ValueError as e:
-        normalized = datetime.now()
-
-    return datetime.fromisoformat(normalized)
+        return datetime.fromisoformat(normalized)
+    except (ValueError, TypeError):
+        return None
 
 
 async def generate_file_name(date) -> str:
