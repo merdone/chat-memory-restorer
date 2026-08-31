@@ -3,8 +3,8 @@ import pathlib
 from datetime import datetime
 from exiftool.exceptions import ExifToolExecuteError
 
-from models import MediaType
-from utils import formate_date_to_iso, formate_date_for_windows, string_to_datetime, get_min_date, convert_timezones
+from app.models import MediaType
+from app.utils import formate_date_to_iso, formate_date_for_windows, string_to_datetime, get_min_date, convert_timezones
 
 path = pathlib.Path().resolve() / "tools" / "exiftool.exe"
 

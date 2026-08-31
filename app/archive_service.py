@@ -4,11 +4,11 @@ import telethon
 from telethon import TelegramClient
 from datetime import datetime
 
-from database import Database
-from metadata_processing import process_metadata_changes
-from models import MessageInfo, SortOptions, DownloadOptions, MediaType, Config
-from storage import FileStorage
-from utils import get_sha256_hash, generate_file_name
+from app.database import Database
+from app.metadata_processing import process_metadata_changes
+from app.models import MessageInfo, SortOptions, DownloadOptions, MediaType, Config
+from app.storage import FileStorage
+from app.utils import get_sha256_hash, generate_file_name
 
 
 class ArchiveService:

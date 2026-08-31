@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 from os import getenv
 
-from models import Config
+from app.models import Config
 
 load_dotenv()
 

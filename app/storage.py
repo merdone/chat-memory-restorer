@@ -2,7 +2,7 @@ from datetime import datetime
 import os
 import pathlib
 
-from models import SortOptions, SortType, MediaType
+from app.models import SortOptions, SortType, MediaType
 
 
 class FileStorage:
