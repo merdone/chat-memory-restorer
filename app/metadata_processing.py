@@ -15,19 +15,23 @@ path = pathlib.Path().resolve() / "tools" / "exiftool.exe"
 def set_metadata_date(image_path, date):
     with ExifToolHelper(executable=path) as et:
         iso_date = formate_date_to_iso(date)
-        et.set_tags(
-            image_path,
-            tags={
-                "EXIF:DateTimeOriginal": iso_date,
-                "EXIF:CreateDate": iso_date,
-                "EXIF:ModifyDate": iso_date,
-                "XMP:CreateDate": iso_date,
-                "XMP:ModifyDate": iso_date,
-                "XMP:DateCreated": iso_date,
-                "QuickTime:CreateDate": iso_date,
-                "QuickTime:ModifyDate": iso_date},
-            params=["-overwrite_original"]
-        )
+        try:
+            et.set_tags(
+                image_path,
+                tags={
+                    "EXIF:DateTimeOriginal": iso_date,
+                    "EXIF:CreateDate": iso_date,
+                    "EXIF:ModifyDate": iso_date,
+                    "XMP:CreateDate": iso_date,
+                    "XMP:ModifyDate": iso_date,
+                    "XMP:DateCreated": iso_date,
+                    "QuickTime:CreateDate": iso_date,
+                    "QuickTime:ModifyDate": iso_date},
+                params=["-overwrite_original"]
+            )
+        except ExifToolExecuteError as error:
+            print("STDOUT:", error.stdout)
+            print("STDERR:", error.stderr)
 
 
 # setting fields File:FileCreateDate, File:FileModifyDate which are important for windows explorer
