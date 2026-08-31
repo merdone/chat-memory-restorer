@@ -12,15 +12,10 @@ from app.utils import get_sha256_hash, generate_file_name
 
 
 class ArchiveService:
-    def __init__(self, config: Config, database: Database, file_storage: FileStorage):
+    def __init__(self, client: TelegramClient, database: Database, file_storage: FileStorage):
         self.database = database
         self.file_storage = file_storage
-        self.config = config
-
-        self.client = TelegramClient('anon', config.api_id, config.api_hash)
-
-    async def start(self):
-        await self.client.start(phone=self.config.phone_number, password=self.config.account_password)
+        self.client = client
 
     @staticmethod
     def process_message(message: telethon.types.Message) -> MessageInfo:
@@ -59,7 +54,7 @@ class ArchiveService:
             media_type = MediaType.TEXT
         return MessageInfo(chat_id, message_id, media_type, message_send_date, media_date, downloadable)
 
-    async def message_pipeline(self, message: telethon.types.Message, database: Database,
+    async def message_pipeline(self, message: telethon.types.Message,
                                sort_options: SortOptions, download_options: DownloadOptions):
         message_info = self.process_message(message)
 
@@ -77,18 +72,18 @@ class ArchiveService:
             downloaded_path = await self.download_message(message, last_date_from_message)
 
             source_hash = get_sha256_hash(downloaded_path)
-            database_path = database.get_media_file_by_hash(source_hash)
+            database_path = self.database.get_media_file_by_hash(source_hash)
 
             # update date if it's older
             if database_path is None:
                 final_date = process_metadata_changes(downloaded_path, media_type, last_date_from_message)
                 additional_path = self.file_storage.build_path(chat_id, media_type, final_date, sort_options)
                 saved_filepath = self.file_storage.replace_file(downloaded_path, additional_path)
-                database.add_media_file(source_hash, final_date, str(saved_filepath))  # date
+                self.database.add_media_file(source_hash, final_date, str(saved_filepath))  # date
             else:
                 os.remove(downloaded_path)
 
-            database.add_message(message_id, media_type, source_hash, message_send_date, chat_id)
+            self.database.add_message(message_id, media_type, source_hash, message_send_date, chat_id)
 
     @staticmethod
     def get_last_date_from_message_data(message_info: MessageInfo):
@@ -101,7 +96,7 @@ class ArchiveService:
     async def process_chat(self, chat_id: int, sort_options: SortOptions, download_options: DownloadOptions):
         last_id = self.database.get_max_message_id(chat_id) or 0
         async for message in self.client.iter_messages(chat_id, reverse=True, limit=None, min_id=last_id):
-            await self.message_pipeline(message, self.database, sort_options, download_options)
+            await self.message_pipeline(message, sort_options, download_options)
 
     async def download_message(self, message: telethon.types.Message, last_date_from_message: datetime) -> str | None:
         filename = generate_file_name(last_date_from_message)
