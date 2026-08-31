@@ -19,7 +19,7 @@ class ArchiveService:
 
     @staticmethod
     def process_message(message: telethon.types.Message) -> MessageInfo:
-        chat_id = message.peer_id.user_id
+        chat_id = message.chat_id
 
         message_id = message.id
         message_send_date = message.date
