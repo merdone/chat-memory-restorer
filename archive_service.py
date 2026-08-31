@@ -35,22 +35,24 @@ class ArchiveService:
 
         if message.media:
             message_media = message.media
-            if isinstance(message_media, telethon.types.MessageMediaDocument):
-                if message_media.voice:
-                    media_type = MediaType.VOICE
-                elif message_media.round:
-                    media_type = MediaType.ROUND
-                elif message.media.video:
-                    media_type = MediaType.VIDEO
-                else:
-                    media_type = MediaType.DOCUMENT
-                document = message_media.document
-                media_date = document.date
-            elif isinstance(message_media, telethon.types.MessageMediaPhoto):
-                media_type = MediaType.PHOTO
-                photo = message_media.photo
-                media_date = photo.date
-
+            try:
+                if isinstance(message_media, telethon.types.MessageMediaDocument):
+                    if message_media.voice:
+                        media_type = MediaType.VOICE
+                    elif message_media.round:
+                        media_type = MediaType.ROUND
+                    elif message.media.video:
+                        media_type = MediaType.VIDEO
+                    else:
+                        media_type = MediaType.DOCUMENT
+                    document = message_media.document
+                    media_date = document.date
+                elif isinstance(message_media, telethon.types.MessageMediaPhoto):
+                    media_type = MediaType.PHOTO
+                    photo = message_media.photo
+                    media_date = photo.date
+            except (AttributeError, ValueError):
+                media_type = MediaType.UNKNOWN
             if media_type != MediaType.UNKNOWN:
                 downloadable = True
         else:
@@ -98,7 +100,7 @@ class ArchiveService:
 
     async def process_chat(self, chat_id: int, sort_options: SortOptions, download_options: DownloadOptions):
         last_id = self.database.get_max_message_id(chat_id) or 0
-        async for message in self.client.iter_messages(chat_id, reverse=False, limit=100, min_id=last_id):
+        async for message in self.client.iter_messages(chat_id, reverse=True, limit=None, min_id=last_id):
             await self.message_pipeline(message, self.database, sort_options, download_options)
 
     async def download_message(self, message: telethon.types.Message, last_date_from_message: datetime) -> str | None:

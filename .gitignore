@@ -14,6 +14,8 @@ data
 tools
 
 *.db
+*.db-journal
 .env
 *.session
+*.session-journal
 plan
